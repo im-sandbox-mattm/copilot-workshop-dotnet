@@ -1,28 +1,39 @@
 # Gas South — Copilot Instructions
 
 ## Stack Context
-- Backend: ASP.NET Core Web API (.NET 8), Clean Architecture pattern
-- Frontend: Angular 17
-- Database: SQLite (dev), SQL Server (prod), accessed via EF Core 8
-- Pattern: CQRS with MediatR — commands return primitive IDs, queries return DTOs
-- Validation: FluentValidation only — never validate in command handlers
-- Mapping: AutoMapper with ProjectTo<> for query projections
-- Tests: NUnit + FluentAssertions + Moq — one test class per handler, Arrange/Act/Assert structure
+<!-- Pre-filled — this is context Copilot can't infer from the code alone -->
+- Backend: ASP.NET Core (.NET 8), Clean Architecture — ApplicationCore / Infrastructure / Web / PublicApi
+- ORM: EF Core 8 — SQLite in development (`UseOnlyInMemoryDatabase: true` in appsettings.json)
+- Pattern: CQRS with MediatR
+- Validation: FluentValidation
+- Mapping: AutoMapper
+- Tests: xUnit + Moq
 
 ## Naming Conventions
-- Commands: `VerbNounCommand` / `VerbNounCommandHandler` in `Commands/VerbNoun/` folder
-- Queries: `GetNounQuery` / `GetNounQueryHandler` in `Queries/GetNoun/` folder
-- Validators: `VerbNounCommandValidator` in the same folder as the command
-- DTOs: `NounBriefDto` (list views) / `NounDetailDto` (single item views)
+<!-- Discover these by browsing src/ApplicationCore/. Look at existing commands, queries, and DTOs.
+     Hint: open src/ApplicationCore/Services/ and src/ApplicationCore/Entities/ and observe the patterns. -->
+
+- Commands: <!-- e.g. VerbNounCommand -->
+- Queries: <!-- e.g. GetNounQuery -->
+- Validators: <!-- where do they live relative to the command? -->
+- DTOs: <!-- what suffix pattern do you see? -->
 
 ## Code Generation Rules
-- All new handlers must implement IRequestHandler<TRequest, TResponse>
-- Always inject IApplicationDbContext, never DbContext directly
-- Async methods must use CancellationToken
-- Use Ardalis.GuardClauses for null/range guard checks
-- Return int (entity ID) from create commands
+<!-- Discover these by reading an existing handler end-to-end.
+     Suggested file: src/ApplicationCore/Services/BasketService.cs or any handler in Web/
+     Ask yourself: what interface is injected? what does the return type look like? what guard library is used? -->
+
+- <!-- Handler interface pattern -->
+- <!-- What to inject (hint: look at constructor params in existing services) -->
+- <!-- Async signature requirement -->
+- <!-- Guard clause library in use (check Directory.Packages.props) -->
 
 ## Test Patterns
-- Test file name: `VerbNounCommandTests.cs` in the matching test project folder
-- Cover: happy path, null input, invalid foreign key reference
-- Use `new CreateTodoItemCommand { ... }` style initialization
+<!-- Discover these by opening tests/UnitTests/ and reading one existing test class.
+     Note the file naming, test method naming format, and AAA structure. -->
+
+- Test file naming: <!-- -->
+- Test method naming format: <!-- -->
+- Mocking library: <!-- -->
+- Assertion library: <!-- -->
+- What cases to cover: <!-- -->
