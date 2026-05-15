@@ -13,7 +13,7 @@
 //   3. Run the same 4 test cases. Compare results with your solo version.
 //   4. Ask Copilot: "What edge cases does this function not cover?"
 //
-// RUN: cd lab-exercises/lab-02-prompt-engineering && node ZipCodeValidator.js
+// NOTE: make sure you're in lab-exercises/lab-02-prompt-engineering to run node ZipCodeValidator.js
 // =====================================
 
 // --- Copilot generates your function here ---
