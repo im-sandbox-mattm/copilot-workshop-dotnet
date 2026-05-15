@@ -3,7 +3,7 @@
 // Task: Use Copilot to write a US zip code validator function.
 //
 // SOLO (10 min):
-//   1. Use Copilot Edits with a VAGUE prompt to generate validateZip() below.
+//   1. Use Copilot with a VAGUE prompt to generate validateZip() below.
 //   2. Uncomment the test calls at the bottom and run: node ZipCodeValidator.js
 //   3. How many of the 4 cases pass? Try one follow-up prompt to fix a gap.
 //
