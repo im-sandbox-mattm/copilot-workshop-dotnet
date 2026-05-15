@@ -6,7 +6,7 @@ Generate a comprehensive xUnit test suite for the referenced file.
 
 Follow these conventions for this codebase:
 - Test framework: xUnit
-- Mocking: Moq
+- Mocking: NSubstitute (`Substitute.For<T>()`)
 - Method naming: `MethodName_StateUnderTest_ExpectedBehavior`
 - Structure: Arrange / Act / Assert with blank line separators between sections
 - One assertion concept per test — don't combine unrelated assertions
