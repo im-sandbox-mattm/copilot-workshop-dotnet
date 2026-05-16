@@ -2,90 +2,91 @@ using System;
 
 namespace Microsoft.eShopWeb.ApplicationCore.Services;
 
+// WORKSHOP ARTIFACT — used in Labs 7, 10, 12 and Day 3 demos. Not production code.
 /// <summary>
-/// Monthly billing calculation — legacy code migrated from VB6.
+/// Order total calculation — legacy pricing engine ported from the v1 storefront.
 /// Cyclomatic complexity: 22 (target: reduce to &lt;10 per method)
-/// Technical debt ticket: GS-891
+/// Technical debt ticket: ESW-2847
 /// </summary>
 public class BillingCalculationService
 {
     // God method — cyclomatic complexity 22, 85 lines
-    public decimal CalculateMonthlyBill(
-        string accountId,
-        string rateCode,
-        decimal usageTherm,
+    public decimal CalculateOrderTotal(
+        string customerId,
+        string membershipTier,
+        decimal catalogSubtotal,
         bool isPeakSeason,
         int loyaltyYears,
         string? promoCode)
     {
         // Magic numbers everywhere
-        if (usageTherm < 0) throw new ArgumentException("Usage cannot be negative");
-        if (string.IsNullOrEmpty(accountId)) throw new ArgumentException("Account required");
+        if (catalogSubtotal < 0) throw new ArgumentException("Order total cannot be negative");
+        if (string.IsNullOrEmpty(customerId)) throw new ArgumentException("Customer ID required");
 
-        decimal baseRate;
-        decimal deliveryCharge;
+        decimal memberDiscount;
+        decimal shippingBase;
         decimal seasonalMultiplier = 1.0m;
 
-        // Complex conditional — rate determination
-        if (rateCode == "RES01")
+        // Complex conditional — membership tier determination
+        if (membershipTier == "BASIC")
         {
-            baseRate = 0.65m;
-            deliveryCharge = 12.50m;
+            memberDiscount = 0.00m;
+            shippingBase = 8.99m;
         }
-        else if (rateCode == "RES02")
+        else if (membershipTier == "STANDARD")
         {
-            baseRate = 0.58m;
-            deliveryCharge = 14.00m;
+            memberDiscount = 0.05m;
+            shippingBase = 6.99m;
         }
-        else if (rateCode == "COM01")
+        else if (membershipTier == "PREMIUM")
         {
-            baseRate = 0.52m;
-            deliveryCharge = 25.00m;
+            memberDiscount = 0.10m;
+            shippingBase = 4.99m;
         }
-        else if (rateCode == "COM02")
+        else if (membershipTier == "ENTERPRISE")
         {
-            baseRate = 0.48m;
-            deliveryCharge = 30.00m;
+            memberDiscount = 0.15m;
+            shippingBase = 2.99m;
         }
-        else if (rateCode == "IND01")
+        else if (membershipTier == "EMPLOYEE")
         {
-            baseRate = 0.42m;
-            deliveryCharge = 50.00m;
+            memberDiscount = 0.20m;
+            shippingBase = 0.00m;
         }
         else
         {
-            baseRate = 0.70m; // Default — highest rate
-            deliveryCharge = 15.00m;
+            memberDiscount = 0.00m; // Default — no discount
+            shippingBase = 9.99m;
         }
 
-        // Seasonal adjustment
+        // Seasonal adjustment — peak season (Black Friday through Dec 31)
         if (isPeakSeason)
         {
-            if (rateCode.StartsWith("RES"))
-                seasonalMultiplier = 1.15m;
-            else if (rateCode.StartsWith("COM"))
-                seasonalMultiplier = 1.10m;
+            if (membershipTier == "PREMIUM" || membershipTier == "ENTERPRISE")
+                seasonalMultiplier = 0.95m; // Loyalty reward during peak
+            else if (membershipTier == "STANDARD")
+                seasonalMultiplier = 1.00m; // No change
             else
-                seasonalMultiplier = 1.08m;
+                seasonalMultiplier = 1.05m; // Surge for non-members
         }
 
-        // Usage tier calculation — nested conditionals
-        decimal usageCharge;
-        if (usageTherm <= 50)
+        // Volume tier calculation — nested conditionals
+        decimal volumeDiscount;
+        if (catalogSubtotal <= 50)
         {
-            usageCharge = usageTherm * baseRate;
+            volumeDiscount = 0m;
         }
-        else if (usageTherm <= 150)
+        else if (catalogSubtotal <= 150)
         {
-            usageCharge = (50 * baseRate) + ((usageTherm - 50) * baseRate * 0.90m);
+            volumeDiscount = (catalogSubtotal - 50) * 0.02m;
         }
-        else if (usageTherm <= 500)
+        else if (catalogSubtotal <= 500)
         {
-            usageCharge = (50 * baseRate) + (100 * baseRate * 0.90m) + ((usageTherm - 150) * baseRate * 0.80m);
+            volumeDiscount = (100 * 0.02m) + ((catalogSubtotal - 150) * 0.05m);
         }
         else
         {
-            usageCharge = (50 * baseRate) + (100 * baseRate * 0.90m) + (350 * baseRate * 0.80m) + ((usageTherm - 500) * baseRate * 0.70m);
+            volumeDiscount = (100 * 0.02m) + (350 * 0.05m) + ((catalogSubtotal - 500) * 0.08m);
         }
 
         // Loyalty discount
@@ -113,13 +114,15 @@ public class BillingCalculationService
         }
 
         // Final calculation
-        var subtotal = (usageCharge * seasonalMultiplier) + deliveryCharge;
+        var afterMemberDiscount = catalogSubtotal * (1 - memberDiscount);
+        var afterVolumeDiscount = afterMemberDiscount - volumeDiscount;
+        var subtotal = (afterVolumeDiscount * seasonalMultiplier) + shippingBase;
         var afterLoyalty = subtotal * (1 - loyaltyDiscount);
         var afterPromo = afterLoyalty * (1 - promoDiscount);
 
-        // Minimum bill enforcement
-        if (afterPromo < deliveryCharge)
-            afterPromo = deliveryCharge;
+        // Minimum order charge
+        if (afterPromo < shippingBase)
+            afterPromo = shippingBase;
 
         return Math.Round(afterPromo, 2, MidpointRounding.ToEven);
     }
