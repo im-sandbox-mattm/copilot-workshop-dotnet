@@ -4,10 +4,10 @@
 <!-- Pre-filled — this is context Copilot can't infer from the code alone -->
 - Backend: ASP.NET Core (.NET 8), Clean Architecture — ApplicationCore / Infrastructure / Web / PublicApi
 - ORM: EF Core 8 — SQLite in development (`UseOnlyInMemoryDatabase: true` in appsettings.json)
-- Pattern: CQRS with MediatR
-- Validation: FluentValidation
+- Pattern: Repository + Service (Ardalis.Specification)
+- Validation: Ardalis.GuardClauses (inline in service methods)
 - Mapping: AutoMapper
-- Tests: xUnit + Moq
+- Tests: xUnit + NSubstitute
 
 ## Naming Conventions
 <!-- Discover these by browsing src/ApplicationCore/. Look at existing commands, queries, and DTOs.
