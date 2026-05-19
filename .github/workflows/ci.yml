@@ -1,0 +1,144 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GOVERNANCE: CI Caller Workflow
+# ─────────────────────────────────────────────────────────────────────────────
+# This is the *consumer* of the governance standard. It owns only two things:
+#
+#   1. WHEN to run (triggers — push, pull_request, schedule, etc.)
+#   2. HOW to call the shared standard (which reusable workflow + what inputs)
+#
+# It does NOT define build steps, test commands, or quality gates.
+# Those live in reusable-build-test.yml and are inherited automatically.
+#
+# This separation means a team can customise their trigger strategy (e.g. skip
+# integration tests on draft PRs) without being able to weaken the build rules.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+
+  # ── Standard build (every push and PR) ──────────────────────────────────────
+  build-and-test:
+    name: Build & Test
+    # "uses" delegates the entire job definition to the reusable workflow.
+    # This repo owns the file, so we reference it with the local "./" prefix.
+    # If it lived in a central org repo it would be:
+    #   uses: my-org/.github/.github/workflows/reusable-build-test.yml@main
+    uses: ./.github/workflows/reusable-build-test.yml
+
+    # "with" maps caller values to the reusable workflow's declared inputs.
+    # Only passing what differs from the defaults keeps this file minimal.
+    with:
+      dotnet-version: "8.0.x"
+      configuration: Release
+      # Skip the slower integration tests on every push; they run in the
+      # separate "full-validation" job below only on PRs targeting main.
+      run-integration-tests: false
+
+    # "secrets: inherit" forwards all secrets from the calling workflow's
+    # context into the reusable workflow. The alternative is mapping them
+    # individually: secrets: { NUGET_AUTH_TOKEN: ${{ secrets.NUGET_AUTH_TOKEN }} }
+    secrets: inherit
+
+  # ── Full validation (PRs to main only) ──────────────────────────────────────
+  # Running integration tests on every push would slow feedback for developers.
+  # Restricting them to PRs targeting main is a common governance trade-off:
+  # fast inner loop, thorough gate before merge.
+  full-validation:
+    name: Full Validation (with integration tests)
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/reusable-build-test.yml
+    with:
+      dotnet-version: "8.0.x"
+      configuration: Release
+      run-integration-tests: true
+    secrets: inherit
+
+  # ── Downstream gate example ──────────────────────────────────────────────────
+  # This job demonstrates consuming the reusable workflow's OUTPUT.
+  # It only runs if the full-validation job produced a build-succeeded=true signal,
+  # which would gate a deployment or release step in a real pipeline.
+  deployment-gate:
+    name: Deployment Gate
+    needs: full-validation
+    if: |
+      github.event_name == 'pull_request' &&
+      needs.full-validation.outputs.build-succeeded == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Approved to deploy
+        run: echo "All quality gates passed — safe to deploy."
+
+  # ── PR governance summary comment ────────────────────────────────────────────
+  # Posts a visible summary directly on the PR so reviewers can see at a glance
+  # which governance gates passed, without having to navigate to the Actions tab.
+  # Uses actions/github-script which gives you the full GitHub API via JS —
+  # no extra tokens needed; GITHUB_TOKEN is provided automatically by Actions.
+  pr-governance-summary:
+    name: Post Governance Summary
+    # Wait for both jobs so the comment reflects the full picture.
+    needs: [ build-and-test, full-validation ]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    # The workflow needs write access to pull-request comments.
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const buildPassed   = '${{ needs.build-and-test.result }}' === 'success';
+            const fullPassed    = '${{ needs.full-validation.result }}' === 'success';
+
+            const icon  = (ok) => ok ? '✅' : '❌';
+            const label = (ok) => ok ? 'passed' : 'failed';
+
+            const body = [
+              '## 🏛️ Governance Gates',
+              '',
+              '| Gate | Result |',
+              '|------|--------|',
+              `| ${icon(buildPassed)} Build & Unit Tests | ${label(buildPassed)} |`,
+              `| ${icon(fullPassed)} Full Validation (incl. integration tests) | ${label(fullPassed)} |`,
+              '',
+              buildPassed && fullPassed
+                ? '_All gates passed — this PR meets the project quality standard._'
+                : '_One or more gates failed. Review the [Actions log](' +
+                  `${context.payload.pull_request.html_url}/checks) for details._`,
+            ].join('\n');
+
+            // Find and update an existing governance comment rather than
+            // posting a new one on every push to the branch.
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('🏛️ Governance Gates')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

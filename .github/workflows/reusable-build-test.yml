@@ -1,0 +1,124 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GOVERNANCE: Reusable Build & Test Workflow
+# ─────────────────────────────────────────────────────────────────────────────
+# This is the *owned standard* — the single definition of what "a passing build"
+# means for this project (or organisation). Instead of each team or repo
+# copy-pasting their own build steps, they call this file. That means:
+#
+#   • Upgrading the .NET version, adding a new test project, or tightening
+#     quality gates happens HERE, once, and every caller inherits the change.
+#
+#   • No caller can silently skip a step. The steps aren't in their repo to edit.
+#
+# In an org-governance pattern this file would live in a *central* shared repo
+# (e.g. my-org/.github) and be called with:
+#   uses: my-org/.github/.github/workflows/reusable-build-test.yml@main
+# For this workshop it lives in the same repo so the demo is self-contained.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Reusable — Build and Test
+
+on:
+  # workflow_call is what makes this file reusable.
+  # Without this trigger the workflow can never be called by another workflow.
+  # It can be combined with other triggers (push, pull_request) if you also
+  # want the workflow to run standalone.
+  workflow_call:
+
+    # Inputs let the caller customise behaviour without forking this file.
+    # Think of them as function parameters — the callee defines the contract,
+    # the caller provides the values.
+    inputs:
+      dotnet-version:
+        description: ".NET SDK version to use"
+        type: string
+        # Defaulting to the project's pinned version means callers don't NEED
+        # to pass this — but they can override it if they're testing an upgrade.
+        default: "8.0.x"
+        required: false
+
+      configuration:
+        description: "Build configuration (Debug | Release)"
+        type: string
+        default: "Release"
+        required: false
+
+      run-integration-tests:
+        description: "Whether to run integration tests (slower; skip on draft PRs)"
+        type: boolean
+        default: false
+        required: false
+
+    # Secrets are inputs whose values are never echoed in logs.
+    # Declare them here even if unused today — it documents what the workflow
+    # *could* need, and callers can pass them when required.
+    secrets:
+      NUGET_AUTH_TOKEN:
+        description: "Token for authenticated NuGet feeds (optional)"
+        required: false
+
+    # Outputs let the caller read results produced by this workflow,
+    # e.g. to gate a downstream deployment job on a test-pass signal.
+    outputs:
+      build-succeeded:
+        description: "true if the build and all tests passed"
+        value: ${{ jobs.build-and-test.outputs.build-succeeded }}
+
+jobs:
+  build-and-test:
+    name: Build & Test (.NET ${{ inputs.dotnet-version }})
+    runs-on: ubuntu-latest
+
+    # Map job outputs so they are visible to callers via the outputs block above.
+    outputs:
+      build-succeeded: ${{ steps.set-output.outputs.build-succeeded }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Using the input value here means the caller controls the SDK version
+      # without touching this file.
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore ./eShopOnWeb.sln
+
+      - name: Build
+        run: |
+          dotnet build ./eShopOnWeb.sln \
+            --configuration ${{ inputs.configuration }} \
+            --no-restore
+
+      - name: Unit tests
+        run: |
+          dotnet test ./tests/UnitTests \
+            --configuration ${{ inputs.configuration }} \
+            --no-build \
+            --verbosity normal
+
+      - name: Functional tests
+        run: |
+          dotnet test ./tests/FunctionalTests \
+            --configuration ${{ inputs.configuration }} \
+            --no-build \
+            --verbosity normal
+
+      # Integration tests are opt-in because they're slower.
+      # The caller decides whether to pay that cost (e.g. skip on draft PRs).
+      - name: Integration tests
+        if: ${{ inputs.run-integration-tests }}
+        run: |
+          dotnet test ./tests/IntegrationTests \
+            --configuration ${{ inputs.configuration }} \
+            --no-build \
+            --verbosity normal
+
+      # Write the output so downstream jobs/callers can read it.
+      - name: Set output
+        id: set-output
+        if: always()
+        run: echo "build-succeeded=${{ job.status == 'success' }}" >> "$GITHUB_OUTPUT"
