@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "python3 .github/hooks/scripts/block-dangerous-edits.py",
+        "osx": "python3 .github/hooks/scripts/block-dangerous-edits.py",
+        "linux": "python3 .github/hooks/scripts/block-dangerous-edits.py",
+        "windows": "python .github\\hooks\\scripts\\block-dangerous-edits.py",
+        "timeout": 15
+      }
+    ]
+  }
+}
